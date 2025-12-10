@@ -1,33 +1,42 @@
 // pages/checkout.js
 import { useEffect, useState } from "react";
 
-export default function Checkout() {
-  const [cart, setCart] = useState({ items: [], totalPrice: 0 });
+const ORDER_DRAFT_KEY = "ssanjae-offline-order-draft";
+const ORDERS_KEY = "ssanjae-offline-orders";
 
+const formatPrice = (value) =>
+  value.toLocaleString("ko-KR", { maximumFractionDigits: 0 }) + "원";
+
+export default function Checkout() {
+  // 1) index에서 넘어온 임시 주문 정보
+  const [draft, setDraft] = useState(null);
+
+  // 2) 입력 폼 상태
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [memo, setMemo] = useState("");
 
+  // 3) 주문 저장 후 알림용
+  const [savedOrderId, setSavedOrderId] = useState(null);
+
+  // 화면이 처음 열릴 때: 로컬스토리지에서 임시 주문 정보 읽기
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const raw = window.localStorage.getItem("ssanjae-current-cart");
+    const raw = window.localStorage.getItem(ORDER_DRAFT_KEY);
     if (!raw) return;
 
     try {
       const parsed = JSON.parse(raw);
-      setCart({
-        items: parsed.items || [],
-        totalPrice: parsed.totalPrice || 0,
-      });
+      setDraft(parsed);
     } catch (e) {
-      console.error(e);
+      console.error("임시 주문 정보 파싱 오류", e);
     }
   }, []);
 
   const handleSaveOrder = () => {
-    if (cart.items.length === 0) {
-      alert("주문 내역이 없습니다. 메인 화면에서 상품을 선택해 주세요.");
+    if (!draft || !draft.items || draft.items.length === 0) {
+      alert("먼저 메인 화면에서 상품을 선택해 주세요.");
       return;
     }
     if (!name.trim()) {
@@ -41,220 +50,186 @@ export default function Checkout() {
 
     if (typeof window === "undefined") return;
 
-    const rawOrders = window.localStorage.getItem("ssanjae-orders") || "[]";
-    let orders = [];
-    try {
-      orders = JSON.parse(rawOrders);
-    } catch (e) {
-      orders = [];
-    }
-
     const newOrder = {
-      id: Date.now(), // 주문 ID
-      items: cart.items,
-      totalPrice: cart.totalPrice,
-      name,
-      phone,
-      memo,
-      status: "pending", // 입금확인 전
-      createdAt: Date.now(),
+      id: Date.now(), // 엑셀/관리자에서 구분용
+      status: "입금확인 전",
+      customerName: name.trim(),
+      phone: phone.trim(),
+      memo: memo.trim() || "-",
+      createdAt: new Date().toLocaleString("ko-KR"),
+      items: draft.items, // 품목/수량/단가 정보
+      totalPrice: draft.totalPrice,
     };
 
+    // 기존 주문 목록 불러오기
+    const rawOrders = window.localStorage.getItem(ORDERS_KEY);
+    let orders = [];
+    if (rawOrders) {
+      try {
+        orders = JSON.parse(rawOrders);
+      } catch (e) {
+        console.error("주문 목록 파싱 오류", e);
+      }
+    }
+
+    // 새 주문 추가 후 저장
     orders.push(newOrder);
-    window.localStorage.setItem("ssanjae-orders", JSON.stringify(orders));
+    window.localStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
 
-    // 현재 장바구니는 비워 두는 게 안전
-    window.localStorage.removeItem("ssanjae-current-cart");
-
+    setSavedOrderId(newOrder.id);
     alert(
-      [
-        "주문 정보가 저장되었습니다.",
-        "",
-        `주문자: ${name}`,
-        `전화번호: ${phone}`,
-        `총 금액: ${cart.totalPrice.toLocaleString()}원`,
-        "",
-        "주문 후 아래 계좌로 입금 부탁드립니다.",
-        "이상재(싼재네마켓) 560501-01-741443",
-      ].join("\n")
+      `주문이 저장되었습니다.\n관리자 화면에서 입금확인 후 '입금완료'로 변경해 주세요.`
     );
   };
 
   return (
-    <div style={{ padding: "16px", fontFamily: "sans-serif" }}>
-      {/* 1. 주문 내역 + 계좌 안내 박스 */}
-      <div
+    <div style={{ padding: "16px", maxWidth: "1000px", margin: "0 auto" }}>
+      {/* 1. 주문 내역 영역 */}
+      <section
         style={{
-          border: "2px solid #0B5538",
+          padding: "12px 16px",
+          marginBottom: "16px",
+          backgroundColor: "#f8fff8",
           borderRadius: "8px",
-          padding: "12px",
-          marginBottom: "20px",
-          background: "#f9fffb",
+          border: "1px solid #d0e8d0",
         }}
       >
-        <h3 style={{ marginTop: 0, marginBottom: "8px" }}>주문 내역</h3>
+        <h2 style={{ margin: "0 0 8px 0" }}>주문 내역</h2>
 
-        {cart.items.length === 0 ? (
-          <div style={{ color: "#999", fontSize: "14px" }}>
+        {!draft || !draft.items || draft.items.length === 0 ? (
+          <p style={{ margin: 0, fontSize: "14px", color: "#555" }}>
             아직 선택된 상품이 없습니다.
             <br />
             메인 화면에서 상품 수량을 선택한 후 다시 와주세요.
-          </div>
+          </p>
         ) : (
           <>
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                marginBottom: "8px",
-                fontSize: "14px",
-              }}
-            >
-              <thead>
-                <tr>
-                  <th style={th}>품목</th>
-                  <th style={th}>수량</th>
-                  <th style={th}>금액</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cart.items.map((item) => (
-                  <tr key={item.id}>
-                    <td style={td}>{item.name}</td>
-                    <td style={td}>{item.quantity}개</td>
-                    <td style={td}>
-                      {(item.price * item.quantity).toLocaleString()}원
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            <div
-              style={{
-                textAlign: "right",
-                fontWeight: "bold",
-                marginBottom: "8px",
-              }}
-            >
-              총 금액: {cart.totalPrice.toLocaleString()}원
+            <ul style={{ paddingLeft: "18px", margin: "0 0 8px 0" }}>
+              {draft.items.map((item) => (
+                <li key={item.id}>
+                  {item.name} × {item.quantity}개 (
+                  {formatPrice(item.price * item.quantity)})
+                </li>
+              ))}
+            </ul>
+            <div style={{ fontWeight: "bold", marginBottom: "4px" }}>
+              총 금액: {formatPrice(draft.totalPrice)}
             </div>
-
-            <div style={{ fontSize: "13px", lineHeight: 1.6 }}>
-              <div>
-                <b>입금 계좌</b>: 이상재(싼재네마켓) 560501-01-741443
-              </div>
-              <div style={{ color: "#d35400", fontWeight: "bold" }}>
-                ※ 주문 후 입금 부탁드립니다.
-              </div>
+            <div style={{ fontSize: "14px", color: "#444" }}>
+              입금 계좌: <strong>이상재(싼재네마켓) 560501-01-741443</strong>
+              <br />
+              <span style={{ color: "#c0392b" }}>
+                주문 후 입금 부탁드립니다.
+              </span>
             </div>
           </>
         )}
-      </div>
+      </section>
 
       {/* 2. 주문자 정보 입력 */}
-      <h2>주문자 정보 입력</h2>
+      <section
+        style={{
+          padding: "12px 16px",
+          marginBottom: "16px",
+          borderRadius: "8px",
+          border: "1px solid #ddd",
+        }}
+      >
+        <h2 style={{ margin: "0 0 12px 0" }}>주문자 정보 입력</h2>
 
-      <div style={{ marginBottom: "10px", fontSize: "13px", color: "#555" }}>
-        주문자 성함은 <b>입금자명과 동일하게</b> 적어주세요.
-      </div>
+        <div style={{ marginBottom: "8px", fontSize: "13px", color: "#444" }}>
+          주문자 성함은 <strong>입금자명과 동일하게</strong> 적어 주세요.
+        </div>
 
-      <div style={{ marginBottom: "8px" }}>
-        <label style={label}>
-          주문자 성함 (입금자명과 동일하게 적어주세요)
+        <div style={{ marginBottom: "8px" }}>
+          <div
+            style={{
+              fontSize: "14px",
+              marginBottom: "4px",
+            }}
+          >
+            주문자 성함(입금자명)
+          </div>
           <input
-            type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            style={input}
             placeholder="예) 이상재"
+            style={{ width: "100%", padding: "8px" }}
           />
-        </label>
-      </div>
+        </div>
 
-      <div style={{ marginBottom: "8px" }}>
-        <label style={label}>
-          전화번호
+        <div style={{ marginBottom: "8px" }}>
+          <div
+            style={{
+              fontSize: "14px",
+              marginBottom: "4px",
+            }}
+          >
+            전화번호
+          </div>
           <input
-            type="text"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            style={input}
             placeholder="예) 01012345678"
+            style={{ width: "100%", padding: "8px" }}
           />
-        </label>
-      </div>
+        </div>
 
-      <div style={{ marginBottom: "16px" }}>
-        <label style={label}>
-          요청사항 (선택)
+        <div style={{ marginBottom: "8px" }}>
+          <div
+            style={{
+              fontSize: "14px",
+              marginBottom: "4px",
+            }}
+          >
+            요청사항 (선택)
+          </div>
           <textarea
             value={memo}
             onChange={(e) => setMemo(e.target.value)}
-            style={{ ...input, height: "80px", resize: "vertical" }}
-            placeholder="예) 조금 늦을 것 같아요 00시"
+            placeholder="예) 조금 늦을 것 같아요 00시쯤 도착할 것 같아요"
+            rows={3}
+            style={{ width: "100%", padding: "8px" }}
           />
-        </label>
-      </div>
+        </div>
 
-      <button
-        onClick={handleSaveOrder}
+        <button
+          onClick={handleSaveOrder}
+          style={{
+            width: "100%",
+            padding: "12px 0",
+            border: "none",
+            marginTop: "8px",
+            backgroundColor: "#004b2f",
+            color: "white",
+            fontSize: "16px",
+            cursor: "pointer",
+          }}
+        >
+          주문 저장 (입금확인 전)
+        </button>
+      </section>
+
+      {/* 3. 입력 확인 미니 미리보기 */}
+      <section
         style={{
-          width: "100%",
-          padding: "12px",
-          backgroundColor: "#0B5538",
-          color: "white",
-          border: "none",
-          borderRadius: "4px",
-          fontSize: "15px",
-          fontWeight: "bold",
-          cursor: "pointer",
-          marginBottom: "20px",
+          padding: "12px 16px",
+          borderRadius: "8px",
+          border: "1px solid #eee",
+          backgroundColor: "#fafafa",
+          fontSize: "14px",
         }}
       >
-        주문 저장 (입금확인 전)
-      </button>
-
-      {/* 3. 입력 확인 박스 */}
-      <div
-        style={{
-          borderTop: "1px solid #eee",
-          paddingTop: "16px",
-          marginTop: "8px",
-        }}
-      >
-        <h3>입력 확인</h3>
+        <h3 style={{ marginTop: 0 }}>입력 확인</h3>
         <p>이름(입금자명): {name || "-"}</p>
         <p>전화번호: {phone || "-"}</p>
         <p>요청사항: {memo || "-"}</p>
-      </div>
+        {savedOrderId && (
+          <p style={{ color: "#2c7" }}>
+            주문이 저장되었습니다. (주문ID: {savedOrderId})
+          </p>
+        )}
+      </section>
     </div>
   );
 }
-
-const th = {
-  borderBottom: "1px solid #ccc",
-  padding: "4px 6px",
-  textAlign: "left",
-  background: "#f3f3f3",
-};
-
-const td = {
-  borderBottom: "1px solid #eee",
-  padding: "4px 6px",
-};
-
-const label = {
-  display: "block",
-  fontSize: "14px",
-  marginBottom: "4px",
-};
-
-const input = {
-  width: "100%",
-  padding: "8px",
-  boxSizing: "border-box",
-  borderRadius: "4px",
-  border: "1px solid #ccc",
-  marginTop: "4px",
-};
