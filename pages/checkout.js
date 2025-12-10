@@ -1,146 +1,260 @@
-import { useState, useEffect } from "react";
+// pages/checkout.js
+import { useEffect, useState } from "react";
 
 export default function Checkout() {
-  // ---- 입력값 상태 ----
-  const [name, setName] = useState("");   // 주문자 성함(입금자명)
-  const [phone, setPhone] = useState(""); // 전화번호
-  const [memo, setMemo] = useState("");   // 요청사항(선택)
+  const [cart, setCart] = useState({ items: [], totalPrice: 0 });
 
-  // 브라우저에 저장된 이름/전화번호 불러오기 (단골 편의)
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [memo, setMemo] = useState("");
+
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const savedName = window.localStorage.getItem("ssanjae-name") || "";
-    const savedPhone = window.localStorage.getItem("ssanjae-phone") || "";
-    setName(savedName);
-    setPhone(savedPhone);
+
+    const raw = window.localStorage.getItem("ssanjae-current-cart");
+    if (!raw) return;
+
+    try {
+      const parsed = JSON.parse(raw);
+      setCart({
+        items: parsed.items || [],
+        totalPrice: parsed.totalPrice || 0,
+      });
+    } catch (e) {
+      console.error(e);
+    }
   }, []);
 
-  // 주문 저장 (입금확인 전 상태로 추가)
-  const handleSubmit = () => {
-    const trimmedName = name.trim();
-    const onlyDigitsPhone = phone.replace(/[^0-9]/g, "");
-
-    if (!trimmedName) {
-      alert("주문자 성함을 입력해 주세요. (입금자명과 동일해야 합니다)");
+  const handleSaveOrder = () => {
+    if (cart.items.length === 0) {
+      alert("주문 내역이 없습니다. 메인 화면에서 상품을 선택해 주세요.");
       return;
     }
-    if (onlyDigitsPhone.length < 10) {
-      alert("연락 가능한 휴대폰 번호를 숫자만으로 입력해 주세요.");
+    if (!name.trim()) {
+      alert("주문자 성함(입금자명)을 입력해 주세요.");
+      return;
+    }
+    if (!phone.trim()) {
+      alert("전화번호를 입력해 주세요.");
       return;
     }
 
-    // 이름/전화번호는 단골 편의를 위해 로컬에 저장
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem("ssanjae-name", trimmedName);
-      window.localStorage.setItem("ssanjae-phone", onlyDigitsPhone);
+    if (typeof window === "undefined") return;
+
+    const rawOrders = window.localStorage.getItem("ssanjae-orders") || "[]";
+    let orders = [];
+    try {
+      orders = JSON.parse(rawOrders);
+    } catch (e) {
+      orders = [];
     }
 
-    // 주문 목록에 새 주문 추가 (입금확인 전 상태)
-    if (typeof window !== "undefined") {
-      const raw = window.localStorage.getItem("ssanjae-orders") || "[]";
-      const orders = JSON.parse(raw);
+    const newOrder = {
+      id: Date.now(), // 주문 ID
+      items: cart.items,
+      totalPrice: cart.totalPrice,
+      name,
+      phone,
+      memo,
+      status: "pending", // 입금확인 전
+      createdAt: Date.now(),
+    };
 
-      const newOrder = {
-        id: Date.now(),              // 임시 주문 ID
-        name: trimmedName,           // 주문자 성함 = 입금자명
-        phone: onlyDigitsPhone,      // 연락처
-        memo,                        // 요청사항
-        status: "pending",           // 입금확인 전
-        createdAt: new Date().toISOString(),
-      };
+    orders.push(newOrder);
+    window.localStorage.setItem("ssanjae-orders", JSON.stringify(orders));
 
-      orders.push(newOrder);
-      window.localStorage.setItem("ssanjae-orders", JSON.stringify(orders));
-    }
+    // 현재 장바구니는 비워 두는 게 안전
+    window.localStorage.removeItem("ssanjae-current-cart");
 
     alert(
-      "주문이 '입금확인 전' 상태로 저장되었습니다.\n" +
-        "입금 후에는 사장님이 관리자 화면에서 '입금완료'로 변경해 주실 거예요."
+      [
+        "주문 정보가 저장되었습니다.",
+        "",
+        `주문자: ${name}`,
+        `전화번호: ${phone}`,
+        `총 금액: ${cart.totalPrice.toLocaleString()}원`,
+        "",
+        "주문 후 아래 계좌로 입금 부탁드립니다.",
+        "이상재(싼재네마켓) 560501-01-741443",
+      ].join("\n")
     );
-
-    // 폼 초기화 (원하면 메모만 비우고 이름/전화번호는 유지해도 됨)
-    setMemo("");
   };
 
   return (
-    <div style={{ padding: "20px", fontFamily: "sans-serif" }}>
+    <div style={{ padding: "16px", fontFamily: "sans-serif" }}>
+      {/* 1. 주문 내역 + 계좌 안내 박스 */}
+      <div
+        style={{
+          border: "2px solid #0B5538",
+          borderRadius: "8px",
+          padding: "12px",
+          marginBottom: "20px",
+          background: "#f9fffb",
+        }}
+      >
+        <h3 style={{ marginTop: 0, marginBottom: "8px" }}>주문 내역</h3>
+
+        {cart.items.length === 0 ? (
+          <div style={{ color: "#999", fontSize: "14px" }}>
+            아직 선택된 상품이 없습니다.
+            <br />
+            메인 화면에서 상품 수량을 선택한 후 다시 와주세요.
+          </div>
+        ) : (
+          <>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                marginBottom: "8px",
+                fontSize: "14px",
+              }}
+            >
+              <thead>
+                <tr>
+                  <th style={th}>품목</th>
+                  <th style={th}>수량</th>
+                  <th style={th}>금액</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cart.items.map((item) => (
+                  <tr key={item.id}>
+                    <td style={td}>{item.name}</td>
+                    <td style={td}>{item.quantity}개</td>
+                    <td style={td}>
+                      {(item.price * item.quantity).toLocaleString()}원
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <div
+              style={{
+                textAlign: "right",
+                fontWeight: "bold",
+                marginBottom: "8px",
+              }}
+            >
+              총 금액: {cart.totalPrice.toLocaleString()}원
+            </div>
+
+            <div style={{ fontSize: "13px", lineHeight: 1.6 }}>
+              <div>
+                <b>입금 계좌</b>: 이상재(싼재네마켓) 560501-01-741443
+              </div>
+              <div style={{ color: "#d35400", fontWeight: "bold" }}>
+                ※ 주문 후 입금 부탁드립니다.
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* 2. 주문자 정보 입력 */}
       <h2>주문자 정보 입력</h2>
 
-      {/* 주문자 성함 */}
-      <label>주문자 성함 (입금자명과 동일하게 적어주세요)</label>
-      <input
-        type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="예) 이상재"
-        style={inputStyle}
-      />
+      <div style={{ marginBottom: "10px", fontSize: "13px", color: "#555" }}>
+        주문자 성함은 <b>입금자명과 동일하게</b> 적어주세요.
+      </div>
 
-      {/* 전화번호 */}
-      <label style={{ marginTop: "15px" }}>전화번호</label>
-      <input
-        type="text"
-        value={phone}
-        onChange={(e) =>
-          setPhone(e.target.value.replace(/[^0-9]/g, ""))
-        }
-        placeholder="숫자만 입력 (예: 01012345678)"
-        maxLength={11}
-        style={inputStyle}
-      />
+      <div style={{ marginBottom: "8px" }}>
+        <label style={label}>
+          주문자 성함 (입금자명과 동일하게 적어주세요)
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            style={input}
+            placeholder="예) 이상재"
+          />
+        </label>
+      </div>
 
-      {/* 메모 */}
-      <label style={{ marginTop: "15px" }}>요청사항 (선택)</label>
-      <textarea
-        value={memo}
-        onChange={(e) => setMemo(e.target.value)}
-        placeholder="예) 조금 늦을 것 같아요 OO시 "
-        style={{ ...inputStyle, height: "80px" }}
-      />
+      <div style={{ marginBottom: "8px" }}>
+        <label style={label}>
+          전화번호
+          <input
+            type="text"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            style={input}
+            placeholder="예) 01012345678"
+          />
+        </label>
+      </div>
 
-      {/* 제출 버튼 */}
+      <div style={{ marginBottom: "16px" }}>
+        <label style={label}>
+          요청사항 (선택)
+          <textarea
+            value={memo}
+            onChange={(e) => setMemo(e.target.value)}
+            style={{ ...input, height: "80px", resize: "vertical" }}
+            placeholder="예) 조금 늦을 것 같아요 00시"
+          />
+        </label>
+      </div>
+
       <button
-        onClick={handleSubmit}
+        onClick={handleSaveOrder}
         style={{
-          marginTop: "20px",
           width: "100%",
           padding: "12px",
-          borderRadius: "6px",
-          border: "none",
-          backgroundColor: "#0c5c3b",
+          backgroundColor: "#0B5538",
           color: "white",
-          fontSize: "16px",
+          border: "none",
+          borderRadius: "4px",
+          fontSize: "15px",
           fontWeight: "bold",
           cursor: "pointer",
+          marginBottom: "20px",
         }}
       >
         주문 저장 (입금확인 전)
       </button>
 
-      {/* 미리보기 영역 */}
+      {/* 3. 입력 확인 박스 */}
       <div
         style={{
-          marginTop: "30px",
-          padding: "15px",
-          background: "#f5f5f5",
-          borderRadius: "6px",
+          borderTop: "1px solid #eee",
+          paddingTop: "16px",
+          marginTop: "8px",
         }}
       >
         <h3>입력 확인</h3>
-        <p>이름(입금자명): {name}</p>
-        <p>전화번호: {phone}</p>
-        <p>요청사항: {memo}</p>
+        <p>이름(입금자명): {name || "-"}</p>
+        <p>전화번호: {phone || "-"}</p>
+        <p>요청사항: {memo || "-"}</p>
       </div>
     </div>
   );
 }
 
-const inputStyle = {
-  width: "100%",
-  padding: "10px",
-  marginTop: "5px",
-  border: "1px solid #ccc",
-  borderRadius: "5px",
+const th = {
+  borderBottom: "1px solid #ccc",
+  padding: "4px 6px",
+  textAlign: "left",
+  background: "#f3f3f3",
+};
+
+const td = {
+  borderBottom: "1px solid #eee",
+  padding: "4px 6px",
+};
+
+const label = {
+  display: "block",
   fontSize: "14px",
+  marginBottom: "4px",
+};
+
+const input = {
+  width: "100%",
+  padding: "8px",
   boxSizing: "border-box",
+  borderRadius: "4px",
+  border: "1px solid #ccc",
+  marginTop: "4px",
 };
