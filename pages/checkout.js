@@ -94,7 +94,7 @@ export default function Checkout() {
       <textarea
         value={memo}
         onChange={(e) => setMemo(e.target.value)}
-        placeholder="예) 부재 시 경비실 / 아이스팩 꼭 넣어주세요"
+        placeholder="예) 조금 늦을 것 같아요 OO시 "
         style={{ ...inputStyle, height: "80px" }}
       />
 
