@@ -2,104 +2,73 @@
 import { useEffect, useState } from "react";
 
 const PRODUCTS_KEY = "ssanjae-offline-products";
-const ORDER_DRAFT_KEY = "ssanjae-offline-order-draft";
+const SELECTED_ITEMS_KEY = "ssanjae-offline-selected-items";
 
-// 기본 상품 목록 (관리자 페이지에서 바꾸면 이 값 대신 저장된 값 사용)
-const defaultProducts = [
-  {
-    id: 1,
-    name: "상하목장 마이리틀 유기농 짜먹는 요구르 플레인",
-    price: 890,
-    stock: 999,
-  },
-  {
-    id: 2,
-    name: "수제 물떡 어묵탕",
-    price: 6900,
-    stock: 999,
-  },
-  {
-    id: 3,
-    name: "따끈따끈 부산완당",
-    price: 3900,
-    stock: 999,
-  },
+const DEFAULT_PRODUCTS = [
+  { id: 1, name: "상하목장 마이리틀 유기농 짜먹는 요거트 플레인", price: 890, stock: 999 },
+  { id: 2, name: "수제 물떡 어묵탕", price: 6900, stock: 999 },
+  { id: 3, name: "따끈따끈 부산완당", price: 3900, stock: 999 },
 ];
 
 export default function Home() {
-  const [products, setProducts] = useState(defaultProducts);
+  const [products, setProducts] = useState([]);
   const [quantities, setQuantities] = useState({});
 
-  // 숫자 → "1,234원" 형식으로
-  const formatPrice = (value) =>
-    value.toLocaleString("ko-KR", { maximumFractionDigits: 0 }) + "원";
-
-  // 처음 화면 열릴 때: 상품 설정 불러오기
+  // 1) 처음 들어올 때, 로컬스토리지에서 상품 목록 불러오기
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // 관리자 페이지에서 저장한 상품 목록이 있으면 사용
     const saved = window.localStorage.getItem(PRODUCTS_KEY);
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setProducts(parsed);
-        }
+        setProducts(JSON.parse(saved));
       } catch (e) {
-        console.error("상품 데이터 파싱 오류", e);
+        console.error(e);
+        setProducts(DEFAULT_PRODUCTS);
       }
+    } else {
+      setProducts(DEFAULT_PRODUCTS);
     }
-
-    // 예전에 저장해 둔 임시 주문 내역은 새 주문을 위해 제거
-    window.localStorage.removeItem(ORDER_DRAFT_KEY);
   }, []);
 
-  // 수량 + / - 버튼
-  const changeQuantity = (id, delta) => {
+  // 2) 수량 변경
+  const changeQty = (id, diff) => {
     setQuantities((prev) => {
       const current = prev[id] || 0;
-      let next = current + delta;
-      if (next < 0) next = 0;
+      const next = current + diff;
+      if (next < 0) return prev;
       return { ...prev, [id]: next };
     });
   };
 
-  // 선택된 상품 목록과 총 금액 계산
+  // 3) 선택한 상품들로 요약 만들기
   const selectedItems = products
     .map((p) => ({
       ...p,
       quantity: quantities[p.id] || 0,
+      totalPrice: (quantities[p.id] || 0) * p.price,
     }))
-    .filter((p) => p.quantity > 0);
+    .filter((item) => item.quantity > 0);
 
-  const totalPrice = selectedItems.reduce(
-    (sum, p) => sum + p.price * p.quantity,
+  const totalAmount = selectedItems.reduce(
+    (sum, item) => sum + item.totalPrice,
     0
   );
 
-  // "주문 정보 입력하기" 버튼 눌렀을 때
-  const goToCheckout = () => {
+  // 4) "주문 정보 입력하기" 버튼 클릭 시
+  const handleGoCheckout = () => {
     if (selectedItems.length === 0) {
-      alert("먼저 상품 수량을 선택해 주세요!");
+      alert("상품을 하나 이상 선택해 주세요!");
       return;
     }
 
     if (typeof window === "undefined") return;
 
-    // checkout에서 사용할 임시 주문 정보 저장
-    const draft = {
-      items: selectedItems.map((p) => ({
-        id: p.id,
-        name: p.name,
-        price: p.price,
-        quantity: p.quantity,
-      })),
-      totalPrice,
-      savedAt: new Date().toISOString(),
-    };
-
-    window.localStorage.setItem(ORDER_DRAFT_KEY, JSON.stringify(draft));
+    // ★ checkout.js 에서도 똑같은 키를 사용할 거야
+    window.localStorage.setItem(
+      SELECTED_ITEMS_KEY,
+      JSON.stringify(selectedItems)
+    );
 
     // /checkout 페이지로 이동
     window.location.href = "/checkout";
@@ -109,121 +78,151 @@ export default function Home() {
     <div
       style={{
         minHeight: "100vh",
-        display: "flex",
-        flexDirection: "column",
+        backgroundColor: "#f5f5f5",
+        fontFamily: "sans-serif",
       }}
     >
-      {/* 상단 설명 */}
-      <div style={{ padding: "16px" }}>
-        <h1 style={{ marginBottom: "8px" }}>싼재네 오프라인 주문</h1>
-        <p style={{ fontSize: "14px", color: "#555" }}>
-          오늘 판매하는 품목입니다.
-          <br />
-          원하는 수량을 선택하신 뒤, 아래{" "}
-          <strong>“주문 정보 입력하기”</strong> 버튼을 눌러 주세요.
-        </p>
-      </div>
-
-      {/* 상품 목록 */}
-      <div style={{ flex: 1 }}>
-        {products.map((product) => (
-          <div
-            key={product.id}
-            style={{
-              borderTop: "1px solid #eee",
-              borderBottom: "1px solid #eee",
-              padding: "16px",
-            }}
-          >
-            <div style={{ marginBottom: "4px", fontWeight: "bold" }}>
-              {product.name}
-            </div>
-            <div
-              style={{
-                fontSize: "14px",
-                color: "#666",
-                marginBottom: "8px",
-              }}
-            >
-              가격: {formatPrice(product.price)}
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-              }}
-            >
-              <button
-                onClick={() => changeQuantity(product.id, -1)}
-                style={{
-                  width: "28px",
-                  height: "28px",
-                  borderRadius: "50%",
-                }}
-              >
-                -
-              </button>
-              <span style={{ minWidth: "20px", textAlign: "center" }}>
-                {quantities[product.id] || 0}
-              </span>
-              <button
-                onClick={() => changeQuantity(product.id, 1)}
-                style={{
-                  width: "28px",
-                  height: "28px",
-                  borderRadius: "50%",
-                }}
-              >
-                +
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* 선택한 상품 요약 */}
-      <div
+      <header
         style={{
           padding: "16px",
-          borderTop: "1px solid #ddd",
-          backgroundColor: "#fafafa",
-          fontSize: "14px",
+          backgroundColor: "#00512c",
+          color: "white",
+          fontSize: "18px",
+          fontWeight: "bold",
         }}
       >
-        <div style={{ marginBottom: "8px", fontWeight: "bold" }}>
-          선택한 상품 요약
-        </div>
-        {selectedItems.length === 0 ? (
-          <div>아직 선택한 상품이 없습니다.</div>
-        ) : (
-          <>
-            <ul style={{ paddingLeft: "18px", marginTop: 0 }}>
-              {selectedItems.map((item) => (
-                <li key={item.id}>
-                  {item.name} × {item.quantity}
-                </li>
-              ))}
-            </ul>
-            <div style={{ marginTop: "8px", fontWeight: "bold" }}>
-              총 금액: {formatPrice(totalPrice)}
-            </div>
-          </>
-        )}
-      </div>
+        싼재네 오프라인 주문
+      </header>
 
-      {/* 하단 주문 버튼 */}
+      <main style={{ padding: "16px" }}>
+        <p style={{ fontSize: "13px", marginBottom: "4px" }}>
+          오늘 판매하는 품목입니다.
+        </p>
+        <p style={{ fontSize: "13px", marginBottom: "16px" }}>
+          원하는 수량을 선택하신 뒤, 아래{" "}
+          <strong>“주문 정보 입력하기” 버튼</strong>을 눌러 주세요.
+        </p>
+
+        {/* 상품 리스트 */}
+        <div
+          style={{
+            backgroundColor: "white",
+            borderRadius: "8px",
+            overflow: "hidden",
+            marginBottom: "16px",
+          }}
+        >
+          {products.map((product) => {
+            const qty = quantities[product.id] || 0;
+            return (
+              <div
+                key={product.id}
+                style={{
+                  borderBottom: "1px solid #eee",
+                  padding: "16px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: "bold", marginBottom: "4px" }}>
+                    {product.name}
+                  </div>
+                  <div style={{ fontSize: "13px", color: "#555" }}>
+                    가격: {product.price.toLocaleString()}원
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <button
+                    onClick={() => changeQty(product.id, -1)}
+                    style={qtyButtonStyle}
+                  >
+                    -
+                  </button>
+                  <span style={{ minWidth: "24px", textAlign: "center" }}>
+                    {qty}
+                  </span>
+                  <button
+                    onClick={() => changeQty(product.id, 1)}
+                    style={qtyButtonStyle}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* 선택한 상품 요약 */}
+        <section
+          style={{
+            backgroundColor: "white",
+            borderRadius: "8px",
+            padding: "16px",
+            marginBottom: "80px",
+          }}
+        >
+          <h2
+            style={{
+              margin: 0,
+              marginBottom: "8px",
+              fontSize: "15px",
+              fontWeight: "bold",
+            }}
+          >
+            선택한 상품 요약
+          </h2>
+
+          {selectedItems.length === 0 ? (
+            <p style={{ fontSize: "13px", color: "#666" }}>
+              아직 선택된 상품이 없습니다.
+            </p>
+          ) : (
+            <>
+              <ul style={{ paddingLeft: "16px", fontSize: "13px" }}>
+                {selectedItems.map((item) => (
+                  <li key={item.id}>
+                    {item.name} × {item.quantity}개 (
+                    {item.totalPrice.toLocaleString()}원)
+                  </li>
+                ))}
+              </ul>
+              <p
+                style={{
+                  marginTop: "8px",
+                  fontSize: "14px",
+                  fontWeight: "bold",
+                }}
+              >
+                총 금액: {totalAmount.toLocaleString()}원
+              </p>
+            </>
+          )}
+        </section>
+      </main>
+
+      {/* 하단 고정 버튼 */}
       <button
-        onClick={goToCheckout}
+        onClick={handleGoCheckout}
         style={{
-          width: "100%",
-          padding: "16px 0",
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: "56px",
+          backgroundColor: "#00512c",
+          color: "#fff",
           border: "none",
-          backgroundColor: "#004b2f",
-          color: "white",
           fontSize: "16px",
-          cursor: "pointer",
         }}
       >
         주문 정보 입력하기
@@ -231,3 +230,12 @@ export default function Home() {
     </div>
   );
 }
+
+const qtyButtonStyle = {
+  width: "32px",
+  height: "32px",
+  borderRadius: "16px",
+  border: "1px solid #ccc",
+  backgroundColor: "white",
+  cursor: "pointer",
+};
