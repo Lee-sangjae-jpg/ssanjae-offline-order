@@ -2,12 +2,11 @@ import { useState, useEffect } from "react";
 
 export default function Checkout() {
   // ---- 입력값 상태 ----
-  const [name, setName] = useState("");       // 주문자 성함
-  const [phone, setPhone] = useState("");     // 전화번호
-  const [receipt, setReceipt] = useState(""); // 현금영수증 번호(선택)
-  const [memo, setMemo] = useState("");       // 요청사항(선택)
+  const [name, setName] = useState("");   // 주문자 성함(입금자명)
+  const [phone, setPhone] = useState(""); // 전화번호
+  const [memo, setMemo] = useState("");   // 요청사항(선택)
 
-  // 브라우저에 저장된 이름/전화번호 불러오기 (단골 편의용)
+  // 브라우저에 저장된 이름/전화번호 불러오기 (단골 편의)
   useEffect(() => {
     if (typeof window === "undefined") return;
     const savedName = window.localStorage.getItem("ssanjae-name") || "";
@@ -16,13 +15,13 @@ export default function Checkout() {
     setPhone(savedPhone);
   }, []);
 
-  // 주문 정보 임시 저장 (나중에 여기서 구글시트/백엔드로 전송)
+  // 주문 저장 (입금확인 전 상태로 추가)
   const handleSubmit = () => {
     const trimmedName = name.trim();
     const onlyDigitsPhone = phone.replace(/[^0-9]/g, "");
 
     if (!trimmedName) {
-      alert("주문자 성함을 입력해 주세요.");
+      alert("주문자 성함을 입력해 주세요. (입금자명과 동일해야 합니다)");
       return;
     }
     if (onlyDigitsPhone.length < 10) {
@@ -30,20 +29,37 @@ export default function Checkout() {
       return;
     }
 
-    // 브라우저에 이름/전화번호 저장 (다음에 자동 입력)
+    // 이름/전화번호는 단골 편의를 위해 로컬에 저장
     if (typeof window !== "undefined") {
       window.localStorage.setItem("ssanjae-name", trimmedName);
       window.localStorage.setItem("ssanjae-phone", onlyDigitsPhone);
     }
 
-    // 지금은 테스트라 팝업만 띄움 (나중엔 주문 데이터 전송)
+    // 주문 목록에 새 주문 추가 (입금확인 전 상태)
+    if (typeof window !== "undefined") {
+      const raw = window.localStorage.getItem("ssanjae-orders") || "[]";
+      const orders = JSON.parse(raw);
+
+      const newOrder = {
+        id: Date.now(),              // 임시 주문 ID
+        name: trimmedName,           // 주문자 성함 = 입금자명
+        phone: onlyDigitsPhone,      // 연락처
+        memo,                        // 요청사항
+        status: "pending",           // 입금확인 전
+        createdAt: new Date().toISOString(),
+      };
+
+      orders.push(newOrder);
+      window.localStorage.setItem("ssanjae-orders", JSON.stringify(orders));
+    }
+
     alert(
-      `주문 정보가 저장되었습니다.\n\n` +
-        `이름: ${trimmedName}\n` +
-        `전화번호: ${onlyDigitsPhone}\n` +
-        `현금영수증: ${receipt || "미신청"}\n` +
-        `메모: ${memo || "-"}`
+      "주문이 '입금확인 전' 상태로 저장되었습니다.\n" +
+        "입금 후에는 사장님이 관리자 화면에서 '입금완료'로 변경해 주실 거예요."
     );
+
+    // 폼 초기화 (원하면 메모만 비우고 이름/전화번호는 유지해도 됨)
+    setMemo("");
   };
 
   return (
@@ -51,12 +67,12 @@ export default function Checkout() {
       <h2>주문자 정보 입력</h2>
 
       {/* 주문자 성함 */}
-      <label>주문자 성함</label>
+      <label>주문자 성함 (입금자명과 동일하게 적어주세요)</label>
       <input
         type="text"
         value={name}
         onChange={(e) => setName(e.target.value)}
-        placeholder="이름을 입력하세요"
+        placeholder="예) 이상재"
         style={inputStyle}
       />
 
@@ -68,20 +84,8 @@ export default function Checkout() {
         onChange={(e) =>
           setPhone(e.target.value.replace(/[^0-9]/g, ""))
         }
-        placeholder="숫자만 입력해 주세요 (예: 01012345678)"
+        placeholder="숫자만 입력 (예: 01012345678)"
         maxLength={11}
-        style={inputStyle}
-      />
-
-      {/* 현금영수증 */}
-      <label style={{ marginTop: "15px" }}>현금영수증 번호 (선택)</label>
-      <input
-        type="text"
-        value={receipt}
-        onChange={(e) =>
-          setReceipt(e.target.value.replace(/[^0-9]/g, ""))
-        }
-        placeholder="휴대폰 번호 / 사업자번호 등"
         style={inputStyle}
       />
 
@@ -90,7 +94,7 @@ export default function Checkout() {
       <textarea
         value={memo}
         onChange={(e) => setMemo(e.target.value)}
-        placeholder="예) 아이스팩 꼭 넣어주세요 / 부재 시 경비실 맡겨주세요"
+        placeholder="예) 부재 시 경비실 / 아이스팩 꼭 넣어주세요"
         style={{ ...inputStyle, height: "80px" }}
       />
 
@@ -110,7 +114,7 @@ export default function Checkout() {
           cursor: "pointer",
         }}
       >
-        주문자 정보 저장 (테스트)
+        주문 저장 (입금확인 전)
       </button>
 
       {/* 미리보기 영역 */}
@@ -123,10 +127,9 @@ export default function Checkout() {
         }}
       >
         <h3>입력 확인</h3>
-        <p>이름: {name}</p>
+        <p>이름(입금자명): {name}</p>
         <p>전화번호: {phone}</p>
-        <p>현금영수증: {receipt}</p>
-        <p>메모: {memo}</p>
+        <p>요청사항: {memo}</p>
       </div>
     </div>
   );
