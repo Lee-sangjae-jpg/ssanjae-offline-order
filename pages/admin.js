@@ -159,4 +159,127 @@ export default function Admin() {
                     backgroundColor: o.status === "paid" ? "#2ecc71" : "#f39c12",
                     color: "#fff",
                     border: "none",
-                    borde
+                    borderRadius: "4px",
+                    fontSize: "12px",
+                    cursor: "pointer",
+                  }}
+                >
+                  {o.status === "paid"
+                    ? "다시 입금확인 전"
+                    : "입금완료 처리"}
+                </button>
+              </td>
+
+              <td style={td}>
+                <button
+                  onClick={() => handleCancelOrder(o.id)}
+                  style={{
+                    padding: "4px 8px",
+                    backgroundColor: "#7f8c8d",
+                    border: "none",
+                    borderRadius: "4px",
+                    color: "#fff",
+                    marginRight: "4px",
+                    cursor: "pointer",
+                    fontSize: "11px",
+                  }}
+                >
+                  주문취소
+                </button>
+
+                <button
+                  onClick={() => handleDeleteOrder(o.id)}
+                  style={{
+                    padding: "4px 8px",
+                    backgroundColor: "#c0392b",
+                    border: "none",
+                    borderRadius: "4px",
+                    color: "#fff",
+                    cursor: "pointer",
+                    fontSize: "11px",
+                  }}
+                >
+                  삭제
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <style jsx>{`
+        .status {
+          padding: 4px 8px;
+          color: white;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: bold;
+        }
+        .pending {
+          background-color: #e74c3c;
+          animation: blink 1s infinite;
+        }
+        .paid {
+          background-color: #2ecc71;
+        }
+        .canceled {
+          background-color: #7f8c8d;
+        }
+        @keyframes blink {
+          0% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.3;
+          }
+          100% {
+            opacity: 1;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// 상태 텍스트 (CSV용)
+function statusLabel(s) {
+  if (s === "paid") return "입금완료";
+  if (s === "canceled") return "주문취소";
+  return "입금확인 전";
+}
+
+// 전화번호 포맷
+function formatPhone(phone) {
+  const d = String(phone).replace(/[^0-9]/g, "");
+  if (d.length === 11) return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
+  return phone;
+}
+
+// 상태 뱃지
+function StatusBadge({ status }) {
+  return (
+    <span
+      className={
+        "status " +
+        (status === "paid"
+          ? "paid"
+          : status === "canceled"
+          ? "canceled"
+          : "pending")
+      }
+    >
+      {statusLabel(status)}
+    </span>
+  );
+}
+
+const th = {
+  borderBottom: "1px solid #ccc",
+  padding: "8px",
+  background: "#f7f7f7",
+};
+
+const td = {
+  borderBottom: "1px solid #eee",
+  padding: "8px",
+};
